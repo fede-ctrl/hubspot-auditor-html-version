@@ -1,0 +1,1 @@
+# hubspot-auditor-html-version
