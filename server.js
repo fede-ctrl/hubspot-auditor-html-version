@@ -40,7 +40,7 @@ async function getValidAccessToken(portalId) {
 }
 
 app.get('/api/install', (req, res) => {
-    const SCOPES = 'oauth crm.objects.companies.read crm.objects.contacts.read crm.schemas.companies.read crm.schemas.contacts.read reports_read';
+    const SCOPES = 'oauth crm.objects.companies.read crm.objects.contacts.read crm.schemas.companies.read crm.schemas.contacts.read reports_read automation';
     const authUrl = `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPES}`;
     res.redirect(authUrl);
 });
@@ -71,7 +71,6 @@ app.get('/api/oauth-callback', async (req, res) => {
 });
 
 app.get('/api/audit', async (req, res) => {
-    // This endpoint remains for the property fill rate audit.
     const portalId = req.header('X-HubSpot-Portal-Id');
     const objectType = req.query.objectType || 'contacts';
     if (!portalId) return res.status(400).json({ message: 'HubSpot Portal ID is missing.' });
@@ -95,7 +94,7 @@ app.get('/api/audit', async (req, res) => {
 
         let recordsSample = [];
         let after = undefined;
-        for (let i = 0; i < 10; i++) { // Fetch up to 1000 records
+        for (let i = 0; i < 10; i++) {
             const sampleUrl = `https://api.hubapi.com/crm/v3/objects/${objectType}?limit=100&properties=${propertyNames.join(',')}` + (after ? `&after=${after}` : '');
             const sampleResponse = await fetch(sampleUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
             if (!sampleResponse.ok) break;
@@ -105,13 +104,12 @@ app.get('/api/audit', async (req, res) => {
         }
 
         if (recordsSample.length === 0) {
-            // Handle case with no records
             return res.json({
                 totalRecords: 0, totalProperties: allProperties.length, averageCustomFillRate: 0, propertiesWithZeroFillRate: allProperties.length,
                 properties: allProperties.map(p => ({ label: p.label, internalName: p.name, type: p.type, description: p.description || '', isCustom: !p.hubspotDefined, fillRate: 0, fillCount: 0 })),
             });
         }
-        
+
         const fillCounts = {};
         recordsSample.forEach(r => Object.keys(r.properties).forEach(p => { if (r.properties[p] !== null && r.properties[p] !== '') fillCounts[p] = (fillCounts[p] || 0) + 1; }));
 
@@ -139,7 +137,6 @@ app.get('/api/data-health', async (req, res) => {
     try {
         const accessToken = await getValidAccessToken(portalId);
         
-        // --- KPIs calculated via direct search ---
         const orphanedContactsSearch = { filterGroups: [{ filters: [{ propertyName: 'associatedcompanyid', operator: 'NOT_HAS_PROPERTY' }] }], limit: 1 };
         const orphanedContactsRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/search', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(orphanedContactsSearch) });
         const orphanedContactsData = await orphanedContactsRes.json();
@@ -148,7 +145,6 @@ app.get('/api/data-health', async (req, res) => {
         const emptyCompaniesRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(emptyCompaniesSearch) });
         const emptyCompaniesData = await emptyCompaniesRes.json();
         
-        // --- KPIs calculated via sampling for performance ---
         const contactSampleRes = await fetch(`https://api.hubapi.com/crm/v3/objects/contacts?limit=100&properties=email`, { headers: { 'Authorization': `Bearer ${accessToken}` }});
         const contactSampleData = await contactSampleRes.json();
         const emailCounts = contactSampleData.results.reduce((acc, c) => { const email = c.properties.email?.toLowerCase(); if(email) acc[email] = (acc[email] || 0) + 1; return acc; }, {});
@@ -182,9 +178,7 @@ app.get('/api/stale-reports', async (req, res) => {
             const url = `https://api.hubapi.com/reports/v3/reports` + (after ? `?after=${after}` : '');
             const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
             if (!response.ok) {
-                 const errorBody = await response.text();
-                 console.error("HubSpot Reports API Error:", errorBody);
-                 throw new Error('Failed to fetch reports. Your HubSpot account may not have access to this API.');
+                 throw new Error('Failed to fetch reports. Your HubSpot account may not have access to this API or the required permissions were not granted.');
             }
             const data = await response.json();
             allReports.push(...data.results);
@@ -202,5 +196,31 @@ app.get('/api/stale-reports', async (req, res) => {
     }
 });
 
+app.get('/api/inactive-workflows', async (req, res) => {
+    const portalId = req.header('X-HubSpot-Portal-Id');
+    if (!portalId) return res.status(400).json({ message: 'HubSpot Portal ID is missing.' });
+    try {
+        const accessToken = await getValidAccessToken(portalId);
+        const allWorkflows = [];
+        let after = null;
+        do {
+            const url = `https://api.hubapi.com/automation/v3/workflows` + (after ? `?after=${after}` : '');
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            if (!response.ok) {
+                 throw new Error('Failed to fetch workflows. Your HubSpot account may not have access to this API or the required permissions were not granted.');
+            }
+            const data = await response.json();
+            allWorkflows.push(...data.results);
+            after = data.paging?.next?.after || null;
+        } while (after);
+        const inactiveWorkflows = allWorkflows.filter(wf => wf.enabled === false)
+            .map(wf => ({ name: wf.name, id: wf.id, updatedAt: wf.updatedAt.split('T')[0] }));
+        inactiveWorkflows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        res.json({ inactiveWorkflows });
+    } catch (error) {
+        console.error("Inactive Workflows Audit Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
 
 app.listen(PORT, () => console.log(`✅ Server is live on port ${PORT}`));
