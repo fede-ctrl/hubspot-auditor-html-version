@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HubSpot Property Auditor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #f97316;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <div class="flex flex-col items-center">
+            <img src="/logo.png" alt="App Logo" class="w-40 h-40 mb-4"/>
+            <h1 class="text-3xl font-bold text-gray-900">HubSpot Property Auditor</h1>
+            <p class="text-gray-500 mt-2">Authenticated for HubSpot Portal ID: <span id="portal-id" class="font-mono"></span></p>
+        </div>
+
+        <div class="my-8 flex justify-center flex-wrap gap-4">
+            <button id="audit-contacts-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Contacts</button>
+            <button id="audit-companies-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Companies</button>
+        </div>
+
+        <div id="loading" class="text-center my-8 hidden">
+            <div class="loader mx-auto"></div>
+            <p id="loading-text" class="mt-4 text-gray-600">Auditing...</p>
+        </div>
+
+        <div id="error" class="my-8 hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+            <strong class="font-bold">Error: </strong>
+            <span id="error-message"></span>
+        </div>
+        
+        <div id="results-container" class="hidden">
+            <div id="audit-summary" class="my-8">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Audit Summary (<span id="summary-object-type"></span>)</h2>
+                <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+                <p id="audit-timestamp" class="text-center text-sm text-gray-500 mt-4"></p>
+            </div>
+
+            <div id="results-table-container" class="my-8">
+                <div class="flex justify-end mb-4">
+                    <a id="download-csv" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors cursor-pointer">Download CSV</a>
+                </div>
+                <div class="overflow-x-auto bg-white rounded-lg shadow">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Label</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Filled Records</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Estimated Fill Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="properties-tbody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const portalId = '146786336';
+            const API_URL = 'https://hubspot-auditor-service.onrender.com';
+
+            const elements = {
+                portalId: document.getElementById('portal-id'),
+                loading: document.getElementById('loading'),
+                loadingText: document.getElementById('loading-text'),
+                error: document.getElementById('error'),
+                errorMessage: document.getElementById('error-message'),
+                resultsContainer: document.getElementById('results-container'),
+                summaryObjectType: document.getElementById('summary-object-type'),
+                summaryCards: document.getElementById('summary-cards'),
+                auditTimestamp: document.getElementById('audit-timestamp'),
+                propertiesTbody: document.getElementById('properties-tbody'),
+                downloadCsv: document.getElementById('download-csv'),
+                buttons: document.querySelectorAll('button')
+            };
+
+            elements.portalId.textContent = portalId;
+
+            const setButtonsDisabled = (disabled) => elements.buttons.forEach(b => b.disabled = disabled);
+
+            const showLoading = (text) => {
+                elements.resultsContainer.classList.add('hidden');
+                elements.error.classList.add('hidden');
+                elements.loading.classList.remove('hidden');
+                elements.loadingText.textContent = text;
+                setButtonsDisabled(true);
+            };
+
+            const hideLoading = () => {
+                elements.loading.classList.add('hidden');
+                setButtonsDisabled(false);
+            };
+
+            const showError = (message) => {
+                elements.loading.classList.add('hidden');
+                elements.resultsContainer.classList.add('hidden');
+                elements.errorMessage.textContent = message;
+                elements.error.classList.remove('hidden');
+                setButtonsDisabled(false);
+            };
+            
+            const createStatCard = (label, value) => `
+                <div class="bg-white border border-gray-200 rounded-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-gray-800">${value}</div>
+                    <div class="text-sm text-gray-500 mt-1">${label}</div>
+                </div>`;
+
+            const runAudit = async (objectType) => {
+                showLoading(`Auditing ${objectType}... This may take a moment.`);
+                try {
+                    const response = await fetch(`${API_URL}/api/audit?objectType=${objectType}`, { headers: { 'X-HubSpot-Portal-Id': portalId } });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || `An error occurred on the server.`);
+                    }
+                    const data = await response.json();
+                    
+                    // Render summary
+                    elements.summaryObjectType.textContent = objectType;
+                    elements.summaryCards.innerHTML = `
+                        ${createStatCard(`Total ${objectType}`, data.totalRecords.toLocaleString())}
+                        ${createStatCard('Total Properties', data.totalProperties.toLocaleString())}
+                        ${createStatCard('Properties with 0% Fill Rate', data.propertiesWithZeroFillRate.toLocaleString())}
+                        ${createStatCard('Average Fill Rate', `${data.averageFillRate}%`)}
+                    `;
+                    elements.auditTimestamp.textContent = `Based on a sample of up to 1,000 records. Fetched at: ${new Date().toLocaleString()}`;
+                    
+                    // Render table
+                    data.properties.sort((a, b) => a.fillRate - b.fillRate);
+                    elements.propertiesTbody.innerHTML = data.properties.map(prop => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${prop.label}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${prop.internalName}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${prop.type}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${prop.fillCount.toLocaleString()}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <div class="flex items-center">
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${prop.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${prop.fillRate}%"></div></div>
+                                    <span class="ml-3 font-semibold w-10 text-right">${prop.fillRate}%</span>
+                                </div>
+                            </td>
+                        </tr>`).join('');
+                    
+                    prepareCsvDownload(data.properties, objectType);
+                    elements.resultsContainer.classList.remove('hidden');
+                } catch (err) {
+                    showError(err.message);
+                } finally {
+                    hideLoading();
+                }
+            };
+            
+            const prepareCsvDownload = (properties, objectType) => {
+                const headers = "Property Label,Internal Name,Type,Estimated Filled Records,Estimated Fill Rate (%)\n";
+                const csvRows = properties.map(p => `"${p.label.replace(/"/g, '""')}",${p.internalName},${p.type},${p.fillCount},${p.fillRate}`);
+                const csvContent = "data:text/csv;charset=utf-8," + headers + csvRows.join("\n");
+                elements.downloadCsv.href = encodeURI(csvContent);
+                elements.downloadCsv.download = `${objectType}-property-audit-${new Date().toISOString().split('T')[0]}.csv`;
+            };
+            
+            document.getElementById('audit-contacts-btn').addEventListener('click', () => runAudit('contacts'));
+            document.getElementById('audit-companies-btn').addEventListener('click', () => runAudit('companies'));
+        });
+    </script>
+</body>
+</html>
+```eof
