@@ -17,7 +17,7 @@
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <div class="container mx-auto p-4 md:p-8">
         <div class="flex flex-col items-center">
             <img src="/logo2.png" alt="App Logo" class="w-40 h-40 mb-4"/>
             <h1 class="text-3xl font-bold text-gray-900">HubSpot Data Auditor</h1>
@@ -41,13 +41,13 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Label</th>
-                                <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal Name</th>
-                                <th class="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th class="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-                                <th class="w-28 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                <th class="w-40 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Filled Records</th>
-                                <th id="fill-rate-header" class="w-48 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc">Est. Fill Rate</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Property Label</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Internal Name</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Type</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Source</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Description</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Est. Filled Records</th>
+                                <th id="fill-rate-header" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc md:px-6">Est. Fill Rate</th>
                             </tr>
                         </thead>
                         <tbody id="properties-tbody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -102,13 +102,13 @@
             const createStatCard = (l, v) => `<div class="bg-white border border-gray-200 rounded-lg p-6 text-center"><div class="text-3xl font-bold text-gray-800">${v}</div><div class="text-sm text-gray-500 mt-1">${l}</div></div>`;
             const renderTable = () => {
                 elements.propertiesTbody.innerHTML = currentPropertiesData.map(p => `<tr>
-                    <td class="px-6 py-4 text-sm font-medium text-gray-900 break-words">${p.label}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500 font-mono break-words">${p.internalName}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">${p.type}</td>
-                    <td class="px-6 py-4 text-sm font-semibold ${p.isCustom ? 'text-blue-600' : 'text-gray-600'}">${p.isCustom ? 'Custom' : 'Standard'}</td>
-                    <td class="px-6 py-4 text-sm text-center text-gray-500">${p.description ? '<span class="text-green-600" title="Description is present">✓</span>' : '<span class="text-red-500 font-bold" title="Property description is missing">⚠️</span>'}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500 text-right">${p.fillCount.toLocaleString()}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">
+                    <td class="px-3 py-4 text-sm font-medium text-gray-900 break-words md:px-6">${p.label}</td>
+                    <td class="px-3 py-4 text-sm text-gray-500 font-mono break-words md:px-6">${p.internalName}</td>
+                    <td class="px-3 py-4 text-sm text-gray-500 md:px-6">${p.type}</td>
+                    <td class="px-3 py-4 text-sm font-semibold ${p.isCustom ? 'text-blue-600' : 'text-gray-600'} md:px-6">${p.isCustom ? 'Custom' : 'Standard'}</td>
+                    <td class="px-3 py-4 text-sm text-center text-gray-500 md:px-6">${p.description ? '<span class="text-green-600" title="Description is present">✓</span>' : '<span class="text-red-500 font-bold" title="Property description is missing">⚠️</span>'}</td>
+                    <td class="px-3 py-4 text-sm text-gray-500 text-right md:px-6">${p.fillCount.toLocaleString()}</td>
+                    <td class="px-3 py-4 text-sm text-gray-500 md:px-6">
                         <div class="flex items-center">
                             <div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${p.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${p.fillRate}%"></div></div>
                             <span class="ml-3 font-semibold w-10 text-right">${p.fillRate}%</span>
@@ -173,4 +173,3 @@
     </script>
 </body>
 </html>
-
