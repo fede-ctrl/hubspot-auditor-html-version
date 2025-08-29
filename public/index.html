@@ -23,15 +23,15 @@
             <p class="text-gray-500 mt-2">Authenticated for HubSpot Portal ID: <span id="portal-id" class="font-mono"></span></p>
         </div>
         <div class="my-8 flex justify-center flex-wrap gap-4">
-            <button id="audit-contacts-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Contact Properties</button>
-            <button id="audit-companies-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Company Properties</button>
+            <button id="audit-contacts-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Contacts</button>
+            <button id="audit-companies-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Companies</button>
             <button id="audit-reports-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">Audit Stale Reports</button>
         </div>
         <div id="loading" class="text-center my-8 hidden"><div class="loader mx-auto"></div><p id="loading-text" class="mt-4 text-gray-600">Auditing...</p></div>
         <div id="error" class="my-8 hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert"><strong class="font-bold">Error: </strong><span id="error-message"></span></div>
         
         <div id="results-container" class="hidden">
-            <div id="data-health-summary" class="my-8"><h2 class="text-2xl font-semibold mb-4 text-center">Data Health Overview</h2><div id="data-health-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div></div>
+            <div id="data-health-summary" class="my-8"><h2 class="text-2xl font-semibold mb-4 text-center">Data Health Overview (<span id="health-object-type"></span>)</h2><div id="data-health-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div></div>
             <div id="audit-summary" class="my-8"><h2 class="text-2xl font-semibold mb-4 text-center">Property Fill Rate Summary (<span id="summary-object-type"></span>)</h2><div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div><p id="audit-timestamp" class="text-center text-sm text-gray-500 mt-4"></p></div>
             <div id="results-table-container" class="my-8">
                 <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-semibold">Property Details</h2><a id="download-csv" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors cursor-pointer">Download CSV</a></div>
@@ -40,6 +40,8 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Label</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Filled Records</th>
                                 <th id="fill-rate-header" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48 sortable sort-asc">Estimated Fill Rate</th>
@@ -64,11 +66,11 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const portalId = '146786336';
-            const API_URL = ''; // Relative path for the all-in-one app
+            const API_URL = '';
             let currentPropertiesData = [];
             let currentSortDir = 'asc';
             const elements = {
-                portalId: document.getElementById('portal-id'), loading: document.getElementById('loading'), loadingText: document.getElementById('loading-text'), error: document.getElementById('error'), errorMessage: document.getElementById('error-message'), resultsContainer: document.getElementById('results-container'), summaryObjectType: document.getElementById('summary-object-type'), summaryCards: document.getElementById('summary-cards'), auditTimestamp: document.getElementById('audit-timestamp'), propertiesTbody: document.getElementById('properties-tbody'), downloadCsv: document.getElementById('download-csv'), buttons: document.querySelectorAll('button'), fillRateHeader: document.getElementById('fill-rate-header'), dataHealthSummary: document.getElementById('data-health-summary'), dataHealthCards: document.getElementById('data-health-cards'), reportsContainer: document.getElementById('reports-container'), reportsTbody: document.getElementById('reports-tbody'),
+                portalId: document.getElementById('portal-id'), loading: document.getElementById('loading'), loadingText: document.getElementById('loading-text'), error: document.getElementById('error'), errorMessage: document.getElementById('error-message'), resultsContainer: document.getElementById('results-container'), summaryObjectType: document.getElementById('summary-object-type'), summaryCards: document.getElementById('summary-cards'), auditTimestamp: document.getElementById('audit-timestamp'), propertiesTbody: document.getElementById('properties-tbody'), downloadCsv: document.getElementById('download-csv'), buttons: document.querySelectorAll('button'), fillRateHeader: document.getElementById('fill-rate-header'), dataHealthSummary: document.getElementById('data-health-summary'), dataHealthCards: document.getElementById('data-health-cards'), reportsContainer: document.getElementById('reports-container'), reportsTbody: document.getElementById('reports-tbody'), healthObjectType: document.getElementById('health-object-type'),
             };
             elements.portalId.textContent = portalId;
             const setButtonsDisabled = (d) => elements.buttons.forEach(b => b.disabled = d);
@@ -78,7 +80,7 @@
             const hideAllSections = () => { elements.error.classList.add('hidden'); elements.resultsContainer.classList.add('hidden'); elements.reportsContainer.classList.add('hidden'); };
             const createStatCard = (l, v) => `<div class="bg-white border border-gray-200 rounded-lg p-6 text-center"><div class="text-3xl font-bold text-gray-800">${v}</div><div class="text-sm text-gray-500 mt-1">${l}</div></div>`;
             const renderTable = () => {
-                elements.propertiesTbody.innerHTML = currentPropertiesData.map(p => `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.label}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.description ? '<span class="text-green-600" title="Description is present">✓</span>' : '<span class="text-red-500 font-bold" title="Property description is missing">⚠️</span>'}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${p.fillCount.toLocaleString()}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><div class="flex items-center"><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${p.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${p.fillRate}%"></div></div><span class="ml-3 font-semibold w-10 text-right">${p.fillRate}%</span></div></td></tr>`).join('');
+                elements.propertiesTbody.innerHTML = currentPropertiesData.map(p => `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.label}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${p.internalName}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.type}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.description ? '<span class="text-green-600" title="Description is present">✓ Present</span>' : '<span class="text-red-500 font-bold" title="Property description is missing">⚠️ Missing</span>'}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${p.fillCount.toLocaleString()}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><div class="flex items-center"><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${p.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${p.fillRate}%"></div></div><span class="ml-3 font-semibold w-10 text-right">${p.fillRate}%</span></div></td></tr>`).join('');
             };
             const sortAndRenderTable = () => {
                 currentPropertiesData.sort((a,b) => currentSortDir === 'asc' ? a.fillRate - b.fillRate : b.fillRate - a.fillRate);
@@ -98,34 +100,37 @@
                     const propertyData = await propertyDataRes.json();
                     const healthData = await healthDataRes.json();
                     
-                    elements.dataHealthCards.innerHTML = `${createStatCard('Orphaned Contacts (Est.)', healthData.orphanedContacts.toLocaleString())}${createStatCard('Empty Companies (Est.)', healthData.emptyCompanies.toLocaleString())}`;
+                    elements.healthObjectType.textContent = objectType;
+                    if(objectType === 'contacts') {
+                        elements.dataHealthCards.innerHTML = `${createStatCard('Orphaned Contacts', healthData.orphanedContacts.toLocaleString())}${createStatCard('Duplicate Contacts (in sample)', healthData.contactDuplicatesInSample.toLocaleString())}`;
+                    } else { // companies
+                        elements.dataHealthCards.innerHTML = `${createStatCard('Empty Companies', healthData.emptyCompanies.toLocaleString())}${createStatCard('Duplicate Companies (in sample)', healthData.companyDuplicatesInSample.toLocaleString())}`;
+                    }
                     
                     const missingDescCount = propertyData.properties.filter(p => !p.description).length;
                     elements.summaryObjectType.textContent = objectType;
-                    elements.summaryCards.innerHTML = `${createStatCard(`Total ${objectType}`, propertyData.totalRecords.toLocaleString())}${createStatCard('Total Properties', propertyData.totalProperties.toLocaleString())}${createStatCard('Properties Missing Description', missingDescCount)}${createStatCard('Average Fill Rate', `${propertyData.averageFillRate}%`)}`;
+                    elements.summaryCards.innerHTML = `${createStatCard(`Total ${objectType}`, propertyData.totalRecords.toLocaleString())}${createStatCard('Total Properties', propertyData.totalProperties.toLocaleString())}${createStatCard('Properties Missing Description', missingDescCount)}${createStatCard('Avg. Custom Prop. Fill Rate', `${propertyData.averageCustomFillRate}%`)}`;
                     elements.auditTimestamp.textContent = `Based on a sample of up to 1,000 records. Fetched at: ${new Date().toLocaleString()}`;
                     
                     currentPropertiesData = propertyData.properties;
                     sortAndRenderTable();
                     prepareCsvDownload(objectType);
                     elements.resultsContainer.classList.remove('hidden');
-                    elements.dataHealthSummary.classList.remove('hidden');
-
                 } catch (err) { showError(err.message); } finally { hideLoading(); }
             };
             const runStaleReportsAudit = async () => {
                 showLoading('Auditing stale reports...');
                 try {
                     const response = await fetch(`${API_URL}/api/stale-reports`, { headers: { 'X-HubSpot-Portal-Id': portalId } });
+                    if (!response.ok) throw new Error((await response.json()).message);
                     const data = await response.json();
-                    if (data.message) throw new Error(data.message);
                     elements.reportsTbody.innerHTML = data.staleReports.length === 0 ? `<tr><td colspan="2" class="text-center p-6 text-gray-500">No stale reports found. Great job!</td></tr>` : data.staleReports.map(r => `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${r.name}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${r.updatedAt}</td></tr>`).join('');
                     elements.reportsContainer.classList.remove('hidden');
                 } catch (err) { showError(err.message); } finally { hideLoading(); }
             };
             const prepareCsvDownload = (objectType) => {
-                const headers = "Property Label,Description,Estimated Filled Records,Estimated Fill Rate (%)\n";
-                const csvRows = currentPropertiesData.map(p => `"${p.label.replace(/"/g, '""')}","${(p.description || '').replace(/"/g, '""')}",${p.fillCount},${p.fillRate}`);
+                const headers = "Property Label,Internal Name,Type,Description,Estimated Filled Records,Estimated Fill Rate (%)\n";
+                const csvRows = currentPropertiesData.map(p => `"${p.label.replace(/"/g, '""')}","${p.internalName}","${p.type}","${(p.description || '').replace(/"/g, '""')}",${p.fillCount},${p.fillRate}`);
                 const csvContent = "data:text/csv;charset=utf-8," + headers + csvRows.join("\n");
                 elements.downloadCsv.href = encodeURI(csvContent);
                 elements.downloadCsv.download = `${objectType}-property-audit.csv`;
