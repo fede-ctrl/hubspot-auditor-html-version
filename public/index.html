@@ -17,7 +17,7 @@
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <div class="container mx-auto p-4 md:p-8">
         <div class="flex flex-col items-center">
             <img src="/logo2.png" alt="App Logo" class="w-40 h-40 mb-4"/>
             <h1 class="text-3xl font-bold text-gray-900">HubSpot Data Auditor</h1>
@@ -38,16 +38,16 @@
             <div id="results-table-container" class="my-8">
                 <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-semibold">Property Details</h2><a id="download-csv" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors cursor-pointer">Download CSV</a></div>
                 <div class="overflow-x-auto bg-white rounded-lg shadow">
-                    <table class="min-w-full divide-y divide-gray-200 table-fixed">
+                    <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="w-1/4 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Property Label</th>
-                                <th class="w-1/4 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Internal Name</th>
-                                <th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Type</th>
-                                <th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Source</th>
-                                <th class="w-28 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Description</th>
-                                <th class="w-40 px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Est. Filled Records</th>
-                                <th id="fill-rate-header" class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc md:px-6">Est. Fill Rate</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Property Label</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Internal Name</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Type</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Source</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Description</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6">Est. Filled Records</th>
+                                <th id="fill-rate-header" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc md:px-6">Est. Fill Rate</th>
                             </tr>
                         </thead>
                         <tbody id="properties-tbody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -173,4 +173,3 @@
     </script>
 </body>
 </html>
-
