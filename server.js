@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json()); // Add this to parse JSON request bodies
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Environment Variables ---
@@ -19,7 +19,6 @@ const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost
 const REDIRECT_URI = `${RENDER_EXTERNAL_URL}/api/oauth-callback`;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -41,30 +40,6 @@ async function getValidAccessToken(portalId) {
         await supabase.from('installations').update({ access_token, expires_at: newExpiresAt }).eq('hubspot_portal_id', portalId);
     }
     return access_token;
-}
-
-// --- Gemini API Helper ---
-async function callGemini(prompt) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-    const payload = { contents: [{ parts: [{ text: prompt }] }] };
-    try {
-        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error("Gemini API Error:", errorBody);
-            throw new Error(`Gemini API request failed`);
-        }
-        const result = await response.json();
-        const candidate = result.candidates?.[0];
-        if (candidate && candidate.content?.parts?.[0]?.text) {
-            return candidate.content.parts[0].text;
-        } else {
-            throw new Error("Failed to extract text from Gemini API response.");
-        }
-    } catch (error) {
-        console.error("Error calling Gemini API:", error);
-        throw error;
-    }
 }
 
 // --- API Routes ---
@@ -240,33 +215,39 @@ app.get('/api/inactive-workflows', async (req, res) => {
     }
 });
 
-app.post('/api/generate-recommendations', async (req, res) => {
-    if (!GEMINI_API_KEY) return res.status(500).json({ message: "Server is not configured with a Gemini API key." });
-    const { summary, objectType } = req.body;
-    if (!summary || !objectType) return res.status(400).json({ message: 'Audit summary and object type are required.' });
-    const prompt = `You are a HubSpot data quality expert providing advice to a HubSpot administrator. Based on the following audit summary for their ${objectType} data, generate a short, actionable, bulleted list of 2-3 recommendations to improve their data hygiene. Make the recommendations specific and easy to understand. Frame the advice positively. Here is the audit summary: - Total Records: ${summary.totalRecords}, - Total Properties: ${summary.totalProperties}, - Properties with 0% Fill Rate: ${summary.propertiesWithZeroFillRate}, - Average Fill Rate for Custom Properties: ${summary.averageCustomFillRate}%, - Orphaned Records (e.g., Contacts without Companies): ${summary.orphanedRecords}, - Duplicate Records found in a sample: ${summary.duplicateRecords}. Generate the recommendations now.`;
+app.get('/api/data-health/details', async (req, res) => {
+    const portalId = req.header('X-HubSpot-Portal-Id');
+    const type = req.query.type;
+    if (!portalId || !type) {
+        return res.status(400).json({ message: 'Portal ID and audit type are required.' });
+    }
     try {
-        const recommendations = await callGemini(prompt);
-        res.json({ recommendations });
+        const accessToken = await getValidAccessToken(portalId);
+        let searchBody = {};
+        let objectType = '';
+        if (type === 'orphanedContacts') {
+            objectType = 'contacts';
+            searchBody = { filterGroups: [{ filters: [{ propertyName: 'associatedcompanyid', operator: 'NOT_HAS_PROPERTY' }] }], limit: 20, properties: ['firstname', 'lastname', 'email', 'createdate'] };
+        } else if (type === 'emptyCompanies') {
+            objectType = 'companies';
+            searchBody = { filterGroups: [{ filters: [{ propertyName: 'num_associated_contacts', operator: 'EQ', value: 0 }] }], limit: 20, properties: ['name', 'domain', 'createdate'] };
+        } else {
+            return res.status(400).json({ message: 'Invalid detail type requested.' });
+        }
+        const response = await fetch(`https://api.hubapi.com/crm/v3/objects/${objectType}/search`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(searchBody),
+        });
+        if (!response.ok) throw new Error(`Failed to fetch details for ${type}`);
+        const data = await response.json();
+        res.json({ results: data.results });
     } catch (error) {
-        res.status(500).json({ message: "Failed to generate AI recommendations." });
+        console.error(`Drill-down error for ${type}:`, error);
+        res.status(500).json({ message: error.message });
     }
 });
 
-app.post('/api/generate-description', async (req, res) => {
-    if (!GEMINI_API_KEY) return res.status(500).json({ message: "Server is not configured with a Gemini API key." });
-    const { label, internalName, type } = req.body;
-    if (!label || !internalName || !type) return res.status(400).json({ message: 'Property details are required.' });
-    const prompt = `You are a helpful HubSpot administrator. Write a clear, professional, one-sentence description for a HubSpot property. The property has the label "${label}", the internal name "${internalName}", and is a "${type}" type. The description should explain the property's purpose. Do not put the description in quotes.`;
-    try {
-        const description = await callGemini(prompt);
-        res.json({ description: description.trim() });
-    } catch (error) {
-        res.status(500).json({ message: "Failed to generate AI description." });
-    }
-});
-
-// A catch-all to send back to the main page for any other request
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
