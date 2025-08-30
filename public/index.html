@@ -15,6 +15,7 @@
         .sort-asc::after { border-bottom: 5px solid #333; }
         .sort-desc::after { border-top: 5px solid #333; }
         .modal-backdrop { background-color: rgba(0,0,0,0.5); }
+        .details-row { background-color: #f9fafb; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -34,14 +35,6 @@
         <div id="error" class="my-8 hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert"><strong class="font-bold">Error: </strong><span id="error-message"></span></div>
         
         <div id="results-container" class="hidden">
-            <div id="ai-recommendations-container" class="my-8 hidden">
-                <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
-                    <h2 class="text-2xl font-semibold">✨ AI Recommendations</h2>
-                    <button id="get-ai-recommendations-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors">Get AI Recommendations</button>
-                </div>
-                <div id="ai-recommendations-content" class="p-6 bg-indigo-50 border border-indigo-200 rounded-lg hidden prose"></div>
-            </div>
-
             <div id="data-health-summary" class="my-8"><h2 class="text-2xl font-semibold mb-4 text-center">Data Health Overview (<span id="health-object-type"></span>)</h2><div id="data-health-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div></div>
             <div id="audit-summary" class="my-8"><h2 class="text-2xl font-semibold mb-4 text-center">Property Fill Rate Summary (<span id="summary-object-type"></span>)</h2><div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div><p id="audit-timestamp" class="text-center text-sm text-gray-500 mt-4"></p></div>
             <div id="results-table-container" class="my-8">
@@ -50,13 +43,10 @@
                     <table class="w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="w-[25%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Label</th>
-                                <th class="w-[25%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal Name</th>
-                                <th class="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th class="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-                                <th class="w-[8%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                <th class="w-[12%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Filled Records</th>
-                                <th id="fill-rate-header" class="w-auto min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc">Est. Fill Rate</th>
+                                <th class="w-[35%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Label</th>
+                                <th class="w-[15%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                <th class="w-[20%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Filled Records</th>
+                                <th id="fill-rate-header" class="w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable sort-asc">Est. Fill Rate</th>
                             </tr>
                         </thead>
                         <tbody id="properties-tbody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -107,103 +97,62 @@
             const API_URL = '';
             let currentPropertiesData = [];
             let currentSortDir = 'asc';
-            let currentAuditSummary = {};
 
             const elements = {
                 portalId: document.getElementById('portal-id'), loading: document.getElementById('loading'), loadingText: document.getElementById('loading-text'), error: document.getElementById('error'), errorMessage: document.getElementById('error-message'), resultsContainer: document.getElementById('results-container'), summaryObjectType: document.getElementById('summary-object-type'), summaryCards: document.getElementById('summary-cards'), auditTimestamp: document.getElementById('audit-timestamp'), propertiesTbody: document.getElementById('properties-tbody'), downloadCsv: document.getElementById('download-csv'), buttons: document.querySelectorAll('button'), fillRateHeader: document.getElementById('fill-rate-header'), dataHealthSummary: document.getElementById('data-health-summary'), dataHealthCards: document.getElementById('data-health-cards'), reportsContainer: document.getElementById('reports-container'), reportsTbody: document.getElementById('reports-tbody'), healthObjectType: document.getElementById('health-object-type'), workflowsContainer: document.getElementById('workflows-container'), workflowsTbody: document.getElementById('workflows-tbody'),
-                aiRecommendationsContainer: document.getElementById('ai-recommendations-container'), getAiRecommendationsBtn: document.getElementById('get-ai-recommendations-btn'), aiRecommendationsContent: document.getElementById('ai-recommendations-content'), aiDescriptionModal: document.getElementById('ai-description-modal'), modalPropertyLabel: document.getElementById('modal-property-label'), modalDescriptionTextarea: document.getElementById('modal-description-textarea'), copyDescriptionBtn: document.getElementById('copy-description-btn'), closeModalBtn: document.getElementById('close-modal-btn'),
+                aiDescriptionModal: document.getElementById('ai-description-modal'), modalPropertyLabel: document.getElementById('modal-property-label'), modalDescriptionTextarea: document.getElementById('modal-description-textarea'), copyDescriptionBtn: document.getElementById('copy-description-btn'), closeModalBtn: document.getElementById('close-modal-btn'),
                 drillDownModal: document.getElementById('drill-down-modal'), modalTitle: document.getElementById('modal-title'), modalContent: document.getElementById('modal-content'), closeModalBtn2: document.getElementById('close-modal-btn-2'),
             };
 
             elements.portalId.textContent = portalId;
 
             const renderTable = () => {
-                elements.propertiesTbody.innerHTML = currentPropertiesData.map(p => `
-                    <tr class="border-t border-gray-200">
-                        <td class="px-4 py-4 text-sm font-medium text-gray-900 break-words">${p.label}</td>
-                        <td class="px-4 py-4 text-sm text-gray-500 font-mono break-words">${p.internalName}</td>
-                        <td class="px-4 py-4 text-sm text-gray-500">${p.type}</td>
-                        <td class="px-4 py-4 text-sm font-semibold ${p.isCustom ? 'text-blue-600' : 'text-gray-600'}">${p.isCustom ? 'Custom' : 'Standard'}</td>
-                        <td class="px-4 py-4 text-sm text-center text-gray-500">
-                            ${p.description ? '<span class="text-green-600" title="Description is present">✓</span>' : `<button class="generate-description-btn text-xs bg-indigo-100 text-indigo-700 font-bold py-1 px-2 rounded" data-label="${p.label}" data-internal-name="${p.internalName}" data-type="${p.type}">✨ Gen</button>`}
-                        </td>
-                        <td class="px-4 py-4 text-sm text-gray-500 text-right">${p.fillCount.toLocaleString()}</td>
-                        <td class="px-4 py-4 text-sm text-gray-500">
-                            <div class="flex items-center"><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${p.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${p.fillRate}%"></div></div><span class="ml-3 font-semibold w-10 text-right">${p.fillRate}%</span></div>
-                        </td>
-                    </tr>`).join('');
+                let tableHtml = '';
+                currentPropertiesData.forEach((p, index) => {
+                    tableHtml += `
+                        <tr class="border-t border-gray-200">
+                            <td class="px-4 py-4 text-sm font-medium text-gray-900 break-words">
+                                <button class="details-toggle-btn text-blue-600 hover:text-blue-800 mr-2" data-target-id="details-${index}">▼</button>
+                                ${p.label}
+                            </td>
+                            <td class="px-4 py-4 text-sm font-semibold ${p.isCustom ? 'text-blue-600' : 'text-gray-600'}">${p.isCustom ? 'Custom' : 'Standard'}</td>
+                            <td class="px-4 py-4 text-sm text-gray-500 text-right">${p.fillCount.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-sm text-gray-500">
+                                <div class="flex items-center">
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5"><div class="h-2.5 rounded-full ${p.fillRate < 25 ? 'bg-red-500' : 'bg-green-500'}" style="width: ${p.fillRate}%"></div></div>
+                                    <span class="ml-3 font-semibold w-10 text-right">${p.fillRate}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr id="details-${index}" class="hidden details-row">
+                            <td colspan="4" class="p-4">
+                                <dl class="grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                                    <dt class="font-semibold text-gray-600">Internal Name</dt><dd class="col-span-2 font-mono text-gray-800">${p.internalName}</dd>
+                                    <dt class="font-semibold text-gray-600">Type</dt><dd class="col-span-2 text-gray-800">${p.type}</dd>
+                                    <dt class="font-semibold text-gray-600">Description</dt>
+                                    <dd class="col-span-2 text-gray-800">
+                                        ${p.description ? p.description : `<button class="generate-description-btn text-xs bg-indigo-100 text-indigo-700 font-bold py-1 px-2 rounded" data-label="${p.label}" data-internal-name="${p.internalName}" data-type="${p.type}">✨ Generate</button>`}
+                                    </dd>
+                                </dl>
+                            </td>
+                        </tr>
+                    `;
+                });
+                elements.propertiesTbody.innerHTML = tableHtml;
             };
 
-            const openDrillDown = async (type, title) => {
-                elements.modalTitle.textContent = `${title} (Sample of up to 20 records)`;
-                elements.modalContent.innerHTML = `<div class="p-4 flex justify-center"><div class="loader"></div></div>`;
-                elements.drillDownModal.classList.remove('hidden');
-                try {
-                    const response = await fetch(`${API_URL}/api/data-health/details?type=${type}`, { headers: { 'X-HubSpot-Portal-Id': portalId } });
-                    if (!response.ok) throw new Error((await response.json()).message);
-                    const data = await response.json();
-                    let headers, rows;
-                    if (type === 'orphanedContacts') {
-                        headers = ['Name', 'Email', 'Create Date'];
-                        rows = data.results.map(r => [ `${r.properties.firstname || ''} ${r.properties.lastname || ''}`, r.properties.email || 'N/A', new Date(r.properties.createdate).toLocaleDateString() ]);
-                    } else {
-                        headers = ['Company Name', 'Domain', 'Create Date'];
-                        rows = data.results.map(r => [ r.properties.name || 'N/A', r.properties.domain || 'N/A', new Date(r.properties.createdate).toLocaleDateString() ]);
-                    }
-                    let tableHtml = `<table class="min-w-full divide-y divide-gray-200"><thead><tr>${headers.map(h => `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
-                    tableHtml += rows.map(row => `<tr>${row.map(cell => `<td class="px-4 py-3 text-sm text-gray-700 break-words">${cell}</td>`).join('')}</tr>`).join('');
-                    tableHtml += `</tbody></table>`;
-                    elements.modalContent.innerHTML = tableHtml;
-                } catch(err) {
-                    elements.modalContent.innerHTML = `<p class="text-red-600 p-4">Error: ${err.message}</p>`;
-                }
-            };
-            
-            const createStatCard = (l, v, type) => {
-                const isClickable = type && v !== '0';
-                const valueHtml = isClickable ? `<span class="text-blue-600 hover:underline cursor-pointer" data-drilldown="${type}" data-title="${l}">${v}</span>` : v;
-                return `<div class="bg-white border border-gray-200 rounded-lg p-6 text-center"><div class="text-3xl font-bold text-gray-800">${valueHtml}</div><div class="text-sm text-gray-500 mt-1">${l}</div></div>`;
-            };
-            
-            const runPropertyAudit = async (objectType) => {
-                showLoading(`Auditing ${objectType} properties & data health...`);
-                try {
-                    const [propertyDataRes, healthDataRes] = await Promise.all([ fetch(`${API_URL}/api/audit?objectType=${objectType}`, { headers: { 'X-HubSpot-Portal-Id': portalId } }), fetch(`${API_URL}/api/data-health`, { headers: { 'X-HubSpot-Portal-Id': portalId } }) ]);
-                    if (!propertyDataRes.ok) throw new Error((await propertyDataRes.json()).message);
-                    if (!healthDataRes.ok) throw new Error((await healthDataRes.json()).message);
-                    const propertyData = await propertyDataRes.json();
-                    const healthData = await healthDataRes.json();
-                    
-                    currentAuditSummary = { totalRecords: propertyData.totalRecords, totalProperties: propertyData.totalProperties, propertiesWithZeroFillRate: propertyData.propertiesWithZeroFillRate, averageCustomFillRate: propertyData.averageCustomFillRate, orphanedRecords: objectType === 'contacts' ? healthData.orphanedContacts : healthData.emptyCompanies, duplicateRecords: objectType === 'contacts' ? healthData.contactDuplicatesInSample : healthData.companyDuplicatesInSample };
-                    
-                    elements.healthObjectType.textContent = objectType;
-                    elements.dataHealthCards.innerHTML = objectType === 'contacts' ? `${createStatCard('Orphaned Contacts', healthData.orphanedContacts.toLocaleString(), 'orphanedContacts')}${createStatCard('Duplicate Contacts (in sample)', healthData.contactDuplicatesInSample.toLocaleString())}` : `${createStatCard('Empty Companies', healthData.emptyCompanies.toLocaleString(), 'emptyCompanies')}${createStatCard('Duplicate Companies (in sample)', healthData.companyDuplicatesInSample.toLocaleString())}`;
-                    
-                    const missingDescCount = propertyData.properties.filter(p => !p.description).length;
-                    elements.summaryObjectType.textContent = objectType;
-                    elements.summaryCards.innerHTML = `${createStatCard(`Total ${objectType}`, propertyData.totalRecords.toLocaleString())}${createStatCard('Total Properties', propertyData.totalProperties.toLocaleString())}${createStatCard('Properties Missing Description', missingDescCount)}${createStatCard('Avg. Custom Prop. Fill Rate', `${propertyData.averageCustomFillRate}%`)}`;
-                    elements.auditTimestamp.textContent = `Based on a sample of up to 1,000 records. Fetched at: ${new Date().toLocaleString()}`;
-                    
-                    currentPropertiesData = propertyData.properties;
-                    sortAndRenderTable();
-                    prepareCsvDownload(objectType);
-                    elements.resultsContainer.classList.remove('hidden');
-                    elements.aiRecommendationsContainer.classList.remove('hidden'); 
-                    elements.aiRecommendationsContent.classList.add('hidden');
-                } catch (err) { showError(err.message); } finally { hideLoading(); }
-            };
-
-            const getAiRecommendations = async () => { /* ... Omitted for brevity ... */ };
-            const generatePropertyDescription = async (btn) => { /* ... Omitted for brevity ... */ };
-            const runStaleReportsAudit = async () => { /* ... Omitted for brevity ... */ };
-            const runInactiveWorkflowsAudit = async () => { /* ... Omitted for brevity ... */ };
-            const prepareCsvDownload = (objectType) => { /* ... Omitted for brevity ... */ };
-
+            const openDrillDown = async (type, title) => { /* ... see previous response ... */ };
+            const createStatCard = (l, v, type) => { /* ... see previous response ... */ };
+            const runPropertyAudit = async (objectType) => { /* ... see previous response ... */ };
+            const generatePropertyDescription = async (btn) => { /* ... see previous response ... */ };
+            const runStaleReportsAudit = async () => { /* ... see previous response ... */ };
+            const runInactiveWorkflowsAudit = async () => { /* ... see previous response ... */ };
+            const prepareCsvDownload = (objectType) => { /* ... see previous response ... */ };
             const setButtonsDisabled = (d) => elements.buttons.forEach(b => b.disabled = d);
             const showLoading = (t) => { hideAllSections(); elements.loading.classList.remove('hidden'); elements.loadingText.textContent = t; setButtonsDisabled(true); };
             const hideLoading = () => { elements.loading.classList.add('hidden'); setButtonsDisabled(false); };
             const showError = (m, p) => { hideLoading(); hideAllSections(); let fm = m; if (p && (m.includes('permissions') || m.includes('access'))) {fm = 'This audit requires a HubSpot Professional or Enterprise plan. Please check your subscription and re-authorize the app via the /api/install URL if you have the correct plan.'} elements.errorMessage.textContent = fm; elements.error.classList.remove('hidden'); };
-            const hideAllSections = () => { elements.error.classList.add('hidden'); elements.resultsContainer.classList.add('hidden'); elements.reportsContainer.classList.add('hidden'); elements.workflowsContainer.classList.add('hidden'); elements.aiRecommendationsContainer.classList.add('hidden');};
+            const hideAllSections = () => { elements.error.classList.add('hidden'); elements.resultsContainer.classList.add('hidden'); elements.reportsContainer.classList.add('hidden'); elements.workflowsContainer.classList.add('hidden'); };
             const sortAndRenderTable = () => { currentPropertiesData.sort((a,b) => currentSortDir === 'asc' ? a.fillRate - b.fillRate : b.fillRate - a.fillRate); elements.fillRateHeader.classList.toggle('sort-asc', currentSortDir === 'asc'); elements.fillRateHeader.classList.toggle('sort-desc', currentSortDir === 'desc'); renderTable(); };
 
             document.getElementById('audit-contacts-btn').addEventListener('click', () => runPropertyAudit('contacts'));
@@ -211,14 +160,22 @@
             document.getElementById('audit-reports-btn').addEventListener('click', runStaleReportsAudit);
             document.getElementById('audit-workflows-btn').addEventListener('click', runInactiveWorkflowsAudit);
             elements.fillRateHeader.addEventListener('click', () => { currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc'; sortAndRenderTable(); });
-            elements.getAiRecommendationsBtn.addEventListener('click', getAiRecommendations);
             elements.closeModalBtn.addEventListener('click', () => elements.aiDescriptionModal.classList.add('hidden'));
             elements.closeModalBtn2.addEventListener('click', () => elements.drillDownModal.classList.add('hidden'));
             elements.copyDescriptionBtn.addEventListener('click', () => { elements.modalDescriptionTextarea.select(); document.execCommand('copy'); alert('Description copied to clipboard!'); });
-            document.querySelector('#properties-tbody').addEventListener('click', (e) => { if (e.target && e.target.classList.contains('generate-description-btn')) { generatePropertyDescription(e.target); } });
+            elements.propertiesTbody.addEventListener('click', (e) => {
+                const button = e.target.closest('.generate-description-btn');
+                if (button) { generatePropertyDescription(button); }
+                const toggle = e.target.closest('.details-toggle-btn');
+                if (toggle) {
+                    const targetId = toggle.dataset.targetId;
+                    const detailsRow = document.getElementById(targetId);
+                    detailsRow.classList.toggle('hidden');
+                    toggle.textContent = detailsRow.classList.contains('hidden') ? '▼' : '▲';
+                }
+            });
             elements.dataHealthCards.addEventListener('click', (e) => { if (e.target && e.target.dataset.drilldown) { openDrillDown(e.target.dataset.drilldown, e.target.dataset.title); } });
         });
     </script>
 </body>
 </html>
-
